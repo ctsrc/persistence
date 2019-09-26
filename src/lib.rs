@@ -15,6 +15,10 @@
  */
 
 //!
+//! # persistence – Rust library for mutable resizable arrays built on top of mmap
+//!
+//! A resizable, mutable array type implemented in Rust on top of mmap, providing persistence for arrays of data in memory.
+//!
 //! ## Advisory locking
 //!
 //! POSIX advisory locks are not without problems. See for example
