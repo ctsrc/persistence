@@ -14,12 +14,40 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+//!
+//! ## Advisory locking
+//!
+//! POSIX advisory locks are not without problems. See for example
+//! [this comment in the source code of SQLite](https://www.sqlite.org/src/artifact/c230a7a24?ln=994-1081)
+//! for a good write-up about the kinds of problems the developers
+//! of SQLite see with POSIX advisory locks, and some pitfalls that
+//! one should be aware of.
+//!
+//! The persistence library is aimed at a particular group of use-cases
+//! where POSIX advisory locks happen to be suitable. It is imperative
+//! then, that would-be users of the persistence library are aware of
+//! what that group of use-cases is. In the section that follows, we
+//! write a bit about just that; who and what this library is for.
+//!
+//! ## Who and what this library is for
+//!
+//! TODO: Write about who and what the library is for.
+//!
+//! ## Caveats or, some things to keep in mind
+//!
+//! This library makes use of POSIX advisory locks on Unix platforms.
+//!
+//! TODO: Write about how to use the library correctly.
+//!
+
 use memmap::MmapMut;
 use std::{io, slice};
-use std::fs::OpenOptions;
-use std::path::Path;
+use std::fs::{OpenOptions, File};
+use std::path::{Path, PathBuf};
 use std::mem;
 use std::io::Write;
+use fs2::FileExt;
+use tempfile::TempDir;
 
 #[repr(C, packed)]
 pub struct FileHeader<T>
@@ -33,6 +61,7 @@ pub struct FileHeader<T>
 
 pub struct Persistent
 {
+  file: File,
   mm: MmapMut,
 }
 
@@ -41,6 +70,14 @@ impl Persistent
   fn new<T: Sized + Default> (path: &Path, magic_bytes: [u8; 8], data_contained_version: [u8; 3]) -> io::Result<Self>
   {
     let mut file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
+
+    /*
+     * NOTE: The fs2 library is cross-platform beyond just the platforms that we support.
+     *       We use this library not because we want to try and support all of those,
+     *       but because it covers what we want to do and saves us some typing and thinking.
+     *       See the section about advisory locking the doc comments of this file.
+     */
+    file.try_lock_exclusive()?;
 
     let fhs = mem::size_of::<FileHeader<T>>();
 
@@ -72,13 +109,14 @@ impl Persistent
 
     Ok(Self
     {
-      mm
+      file,
+      mm,
     })
   }
 }
 
 /// Helper function for tests.
-fn tempfile_persistent () -> io::Result<Persistent>
+fn persist_to_tempfile () -> io::Result<(TempDir, PathBuf, Persistent)>
 {
   #[repr(C, packed)]
   struct Example
@@ -107,21 +145,42 @@ fn tempfile_persistent () -> io::Result<Persistent>
   let magic_bytes = [b'T', b'E', b'S', b'T', b'F', b'I', b'L', b'E'];
   let data_contained_version = [0, 1, 0];
 
-  Persistent::new::<Example>(path, magic_bytes, data_contained_version)
+  let p = Persistent::new::<Example>(path, magic_bytes, data_contained_version)?;
+
+  Ok((dir, pathbuf, p))
 }
 
 #[test]
 pub fn test_create () -> Result<(), io::Error>
 {
-  tempfile_persistent()?;
+  persist_to_tempfile()?;
 
   Ok(())
 }
 
 #[test]
+pub fn test_file_is_locked () -> Result<(), io::Error>
+{
+  let (dir, pathbuf, p) = persist_to_tempfile()?;
+
+  // TODO: Spawn process which tries to lock file.
+
+  unimplemented!()
+}
+
+#[test]
+pub fn test_file_is_unlocked_after_drop () -> Result<(), io::Error>
+{
+  let (dir, pathbuf, _) = persist_to_tempfile()?;
+
+  // TODO: Spawn process which tries to lock file.
+
+  unimplemented!()
+}
+
+#[test]
 pub fn test_header_corrupt_magic_bytes () -> Result<(), io::Error>
 {
-  // TODO: Corrupt and check each magic byte individually
   unimplemented!()
 }
 
@@ -130,5 +189,3 @@ pub fn test_file_corrupt_truncated_to_under_end_of_header () -> Result<(), io::E
 {
   unimplemented!()
 }
-
-// TODO: Trunc to under default data

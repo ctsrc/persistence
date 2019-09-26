@@ -11,3 +11,4 @@ edition = "2018"
 [dependencies]
 memmap = "0.7.0"
 tempfile = "3.1.0"
+fs2 = "0.4.3"
