@@ -120,6 +120,8 @@ use std::path::{Path, PathBuf};
 use std::mem;
 use std::io::Write;
 use fs2::FileExt;
+
+#[cfg(test)]
 use tempfile::TempDir;
 
 #[repr(C, packed)]
@@ -189,6 +191,7 @@ impl Persistent
 }
 
 /// Helper function for tests.
+#[cfg(test)]
 fn persist_to_tempfile () -> io::Result<(TempDir, PathBuf, Persistent)>
 {
   #[repr(C, packed)]
