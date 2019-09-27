@@ -4,7 +4,7 @@ description = "A resizable, mutable array type implemented on top of mmap, provi
 license = "ISC"
 readme = "README.md"
 repository = "https://github.com/ctsrc/persistence"
-version = "0.0.0"
+version = "0.0.1"
 authors = ["Erik Nordstrøm <erik@nordstroem.no>"]
 edition = "2018"
 
