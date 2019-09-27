@@ -101,6 +101,17 @@
 //!
 //! TODO: Write about how to use the library correctly.
 //!
+//! ## READY? LET'S GO!
+//!
+//! Add [the persistence crate](https://crates.io/crates/persistence) to the `[dependencies]`
+//! section of [your `Cargo.toml` manifest](https://doc.rust-lang.org/cargo/reference/manifest.html)
+//! and start using this library in your projects.
+//!
+//! ## Star me on GitHub
+//!
+//! Don't forget to star [persistence on GitHub](https://github.com/ctsrc/persistence)
+//! if you find this library interesting or useful.
+//!
 
 use memmap::MmapMut;
 use std::{io, slice};
