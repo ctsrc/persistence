@@ -1,9 +1,9 @@
 # persistence – Rust library for mutable resizable arrays built on top of mmap
 
+[![Crates.io](https://img.shields.io/crates/v/persistence.svg)](https://crates.io/crates/persistence) [![Docs.rs](https://docs.rs/persistence/badge.svg)](https://docs.rs/persistence/)
+
 A resizable, mutable array type implemented in Rust on top of mmap, providing
 persistence for arrays of data in memory.
-
-[![Crates.io](https://img.shields.io/crates/v/persistence.svg)](https://crates.io/crates/persistence)
 
 ## Learn more and get started
 
