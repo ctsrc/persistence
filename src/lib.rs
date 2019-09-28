@@ -34,7 +34,14 @@
 //!      such that abnormal termination of your program (e.g. program crash, loss of power, etc.)
 //!      incurs minimal loss of data, and
 //!   4. You are confident that all processes which rely on the data on disk honor the
-//!      POSIX advisory locks that we apply to them, so that the integrity of the data is ensured.
+//!      POSIX advisory locks that we apply to them, so that the integrity of the data is
+//!      ensured, and
+//!   5. You desire, or at least are fine with, having the on-disk representation of your data
+//!      be the same as that which it has in memory, and understand that this means that the files
+//!      are tied to the CPU architecture of the host that they were saved to disk on. If you need
+//!      to migrate your data to another computer with a different CPU architecture in the future,
+//!      you convert it then, rather than serializing and deserializing your data between some
+//!      other format and the in-memory representation all of the time.
 //!
 //! ## POSIX advisory locks
 //!
