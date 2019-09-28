@@ -134,13 +134,13 @@ pub struct FileHeader<T>
   default_data: T,
 }
 
-pub struct Persistent
+pub struct MmapedVec
 {
   file: File,
   mm: MmapMut,
 }
 
-impl Persistent
+impl MmapedVec
 {
   fn new<T: Sized + Default> (path: &Path, magic_bytes: [u8; 8], data_contained_version: [u8; 3]) -> io::Result<Self>
   {
@@ -192,7 +192,7 @@ impl Persistent
 
 /// Helper function for tests.
 #[cfg(test)]
-fn persist_to_tempfile () -> io::Result<(TempDir, PathBuf, Persistent)>
+fn persist_to_tempfile () -> io::Result<(TempDir, PathBuf, MmapedVec)>
 {
   #[repr(C, packed)]
   struct Example
@@ -221,7 +221,7 @@ fn persist_to_tempfile () -> io::Result<(TempDir, PathBuf, Persistent)>
   let magic_bytes = [b'T', b'E', b'S', b'T', b'F', b'I', b'L', b'E'];
   let data_contained_version = [0, 1, 0];
 
-  let p = Persistent::new::<Example>(path, magic_bytes, data_contained_version)?;
+  let p = MmapedVec::new::<Example>(path, magic_bytes, data_contained_version)?;
 
   Ok((dir, pathbuf, p))
 }
