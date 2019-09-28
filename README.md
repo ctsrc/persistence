@@ -38,7 +38,7 @@ comment linked above), everything will be fine and dandy :)
 ## Learn more and get started
 
 [Read the docs for this library](https://docs.rs/persistence/) to learn more
-about what it is for and how you use it.
+about what this library is for and how you use it.
 
 ## Star me on GitHub
 
