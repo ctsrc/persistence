@@ -15,36 +15,39 @@
  */
 
 //!
-//! # persistence – Rust library for mutable resizable arrays built on top of mmap
+//! # persistence – mutable resizable arrays built on top of mmap
 //!
-//! A resizable, mutable array type implemented in Rust on top of mmap,
-//! providing persistence for arrays of data in memory.
+//! This Rust library provides [`MmapedVec`](MmapedVec); a resizable, mutable array type
+//! implemented on top of [`mmap()`](https://pubs.opengroup.org/onlinepubs/7908799/xsh/mmap.html),
+//! providing a [`Vec`](https://doc.rust-lang.org/std/vec/struct.Vec.html)-like data structure
+//! with persistence to disk built into it.
 //!
-//! ## Advisory locking
+//! [`MmapedVec`](MmapedVec) is aimed at developers who wish to write software utilizing
+//! [data-oriented design](https://en.wikipedia.org/wiki/Data-oriented_design)
+//! techniques in run-time environments where all of the following hold true:
 //!
-//! POSIX advisory locks are not without problems. See for example
+//!   1. You have determined that a `Vec`-like data structure is appropriate for some
+//!      or all of your data, and
+//!   2. You require that the data in question be persisted to disk, and
+//!   3. You require that the data in question be synced to disk at certain times
+//!      or intervals, after said data has been mutated (added to, deleted from, or altered),
+//!      such that abnormal termination of your program (e.g. program crash, loss of power, etc.)
+//!      incurs minimal loss of data, and
+//!   4. You are confident that all processes which rely on the data on disk honor the
+//!      POSIX advisory locks that we apply to them, so that the integrity of the data is ensured.
+//!
+//! ## POSIX advisory locks
+//!
+//! This library makes use of POSIX advisory locks on Unix platforms. POSIX advisory locks are
+//! not without problems. See for example
 //! [this comment in the source code of SQLite](https://www.sqlite.org/src/artifact/c230a7a24?ln=994-1081)
 //! for a good write-up about the kinds of problems the developers of SQLite
 //! see with POSIX advisory locks, and some pitfalls that one should be aware of.
 //!
-//! The persistence library is aimed at a particular group of use-cases where
-//! POSIX advisory locks happen to be suitable. It is imperative then, that would-be users
-//! of the persistence library are aware of what that group of use-cases is. In the section
-//! that follows, we write a bit about just that; who and what this library is for.
-//!
-//! ## Who and what this library is for
-//!
-//! This library is aimed at developers who wish to write software utilizing
-//! [data-oriented design](https://en.wikipedia.org/wiki/Data-oriented_design)
-//! techniques in run-time environments where all of the following hold true:
-//!
-//!   1. You require that the data in question be persisted to disk, and
-//!   2. You require that the data in question be synced to disk at certain times
-//!      or intervals, after said data has been mutated (added to, deleted from, or altered),
-//!      such that abnormal termination of your program (e.g. program crash, loss of power, etc.)
-//!      incurs minimal loss of data, and
-//!   3. You are confident that all processes which rely on the data on disk honor the
-//!      POSIX advisory locks that we apply to them, so that the integrity of the data is ensured.
+//! Provided that your software runs in an environment where any process that attempts to open
+//! the files you are persisting your data to honor the advisory locks, and you take care not
+//! to open the same file multiple times within the same process (as per what was said in the
+//! comment linked above), everything will be fine and dandy :)
 //!
 //! ## Motivation
 //!
@@ -57,14 +60,15 @@
 //!   - Making use of the [Serde](https://serde.rs) framework for serializing and deserializing
 //!     Rust data structures, and handle writing to and reading from disk yourself.
 //!
-//! But, when you are architecting software, and you choose to apply the data-oriented design
+//! But, in software architecture situations where you choose to apply the data-oriented design
 //! paradigm to your problem, you may find that you end up with some big arrays of data where
 //! you've ordered the elements of each array in such a way as to be optimized for
 //! [CPU caches](https://en.wikipedia.org/wiki/CPU_cache) in terms of
 //! [spatial locality of reference](https://en.wikipedia.org/wiki/Locality_of_reference#Types_of_locality).
 //!
 //! **When that is the case** – when you have those kinds of arrays, and when you want to persist
-//! the data in those arrays in the manner we talked about [further up in this document](#who-and-what-this-library-is-for),
+//! the data in those arrays in the manner we talked about
+//! [at the beginning of this document](#persistence--mutable-resizable-arrays-built-on-top-of-mmap),
 //! `mmap()`'ing those arrays to files on disk begins to look *pretty* alluring,
 //! doesn't it? And there you have it, that was the motivation for writing this library.
 //!
@@ -96,8 +100,6 @@
 //! </blockquote>
 //!
 //! ## Caveats or, some things to keep in mind
-//!
-//! This library makes use of POSIX advisory locks on Unix platforms.
 //!
 //! TODO: Write about how to use the library correctly.
 //!
