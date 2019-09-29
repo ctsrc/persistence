@@ -125,13 +125,10 @@
 use memmap::MmapMut;
 use std::{io, slice};
 use std::fs::{OpenOptions, File};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::mem;
 use std::io::Write;
 use fs2::FileExt;
-
-#[cfg(test)]
-use tempfile::TempDir;
 
 #[repr(C, packed)]
 pub struct FileHeader<T>
@@ -199,10 +196,14 @@ impl MmapedVec
   }
 }
 
-/// Helper function for tests.
 #[cfg(test)]
-fn persist_to_tempfile () -> io::Result<(TempDir, PathBuf, MmapedVec)>
+mod tests
 {
+  use super::*;
+  use std::path::PathBuf;
+  use std::process::{Command, ExitStatus, Stdio};
+  use tempfile::TempDir;
+
   #[repr(C, packed)]
   struct Example
   {
@@ -215,62 +216,88 @@ fn persist_to_tempfile () -> io::Result<(TempDir, PathBuf, MmapedVec)>
     fn default () -> Self
     {
       Self
-      {
-        hello: 1,
-        world: 2,
-      }
+        {
+          hello: 1,
+          world: 2,
+        }
     }
   }
 
-  let dir = tempfile::tempdir()?;
+  /// Helper function for tests.
+  fn new_mmaped_vec_of_example_persisting_in_tempdir () -> io::Result<(TempDir, PathBuf, MmapedVec)>
+  {
+    let dir = tempfile::tempdir()?;
 
-  let pathbuf = dir.path().join("file.bin");
-  let path = pathbuf.as_path();
+    let pathbuf = dir.path().join("file.bin");
+    let path = pathbuf.as_path();
 
-  let magic_bytes = [b'T', b'E', b'S', b'T', b'F', b'I', b'L', b'E'];
-  let data_contained_version = [0, 1, 0];
+    let magic_bytes = [b'T', b'E', b'S', b'T', b'F', b'I', b'L', b'E'];
+    let data_contained_version = [0, 1, 0];
 
-  let p = MmapedVec::new::<Example>(path, magic_bytes, data_contained_version)?;
+    let p = MmapedVec::new::<Example>(path, magic_bytes, data_contained_version)?;
 
-  Ok((dir, pathbuf, p))
-}
+    Ok((dir, pathbuf, p))
+  }
 
-#[test]
-pub fn test_create () -> Result<(), io::Error>
-{
-  persist_to_tempfile()?;
+  /// Helper function for tests.
+  fn python3_try_lock_exclusive (path: &Path) -> io::Result<ExitStatus>
+  {
+    // NOTE: Keep in mind that if the parent test fails, python3 might not be in your $PATH.
 
-  Ok(())
-}
+    let mut child = Command::new("python3").arg("-").arg(path)
+      .stdin(Stdio::piped()).stdout(Stdio::inherit()).stderr(Stdio::inherit())
+      .spawn()?;
 
-#[test]
-pub fn test_file_is_locked () -> Result<(), io::Error>
-{
-  let (dir, pathbuf, p) = persist_to_tempfile()?;
+    let child_stdin = child.stdin.as_mut().unwrap();
+    child_stdin.write_all(include_bytes!("../scripts/try_lock_exclusive.py"))?;
 
-  // TODO: Spawn process which tries to lock file.
+    child.wait()
+  }
 
-  unimplemented!()
-}
+  #[test]
+  pub fn test_create_mmaped_vec_onto_tempfile () -> Result<(), io::Error>
+  {
+    new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
-#[test]
-pub fn test_file_is_unlocked_after_drop () -> Result<(), io::Error>
-{
-  let (dir, pathbuf, _) = persist_to_tempfile()?;
+    Ok(())
+  }
 
-  // TODO: Spawn process which tries to lock file.
+  #[test]
+  pub fn test_file_is_locked_while_fd_is_held () -> Result<(), io::Error>
+  {
+    let (dir, pathbuf, p) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
-  unimplemented!()
-}
+    assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
 
-#[test]
-pub fn test_header_corrupt_magic_bytes () -> Result<(), io::Error>
-{
-  unimplemented!()
-}
+    /*
+     * XXX: We run the script an additional time to be sure that the test itself does not
+     *      duplicate and close the fd for the file in a way that results in release of the
+     *      advisory lock.
+     */
+    assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
 
-#[test]
-pub fn test_file_corrupt_truncated_to_under_end_of_header () -> Result<(), io::Error>
-{
-  unimplemented!()
+    Ok(())
+  }
+
+  #[test]
+  pub fn test_file_is_unlocked_after_drop () -> Result<(), io::Error>
+  {
+    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+
+    assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(0));
+
+    Ok(())
+  }
+
+  #[test]
+  pub fn test_header_corrupt_magic_bytes () -> Result<(), io::Error>
+  {
+    unimplemented!()
+  }
+
+  #[test]
+  pub fn test_file_corrupt_truncated_to_under_end_of_header () -> Result<(), io::Error>
+  {
+    unimplemented!()
+  }
 }
