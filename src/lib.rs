@@ -290,13 +290,13 @@ mod tests
   }
 
   #[test]
-  pub fn test_header_corrupt_magic_bytes () -> Result<(), io::Error>
+  pub fn test_detect_header_corrupt_magic_bytes () -> Result<(), io::Error>
   {
     unimplemented!()
   }
 
   #[test]
-  pub fn test_file_corrupt_truncated_to_under_end_of_header () -> Result<(), io::Error>
+  pub fn test_detect_file_corrupt_truncated_to_under_end_of_header () -> Result<(), io::Error>
   {
     unimplemented!()
   }
