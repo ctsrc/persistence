@@ -127,7 +127,7 @@ use std::{io, slice};
 use std::fs::{OpenOptions, File};
 use std::path::Path;
 use std::mem;
-use std::io::Write;
+use std::io::{Read, Write};
 use memmap::MmapMut;
 use fs2::FileExt;
 
@@ -193,7 +193,20 @@ impl<T: Sized + Default> MmapedVec<T>
     }
     else
     {
-      // TODO: Validate header.
+      let mut fh_handle = file.try_clone()?.take(fhs as u64);
+      let mut fh_buf = vec![0 as u8; fhs];
+
+      fh_handle.read(fh_buf.as_mut_slice());
+
+      let fh_file = unsafe { std::ptr::read(fh_buf.as_ptr() as *const FileHeader<T>) };
+
+      if fh_file.magic_bytes != fh.magic_bytes
+      {
+        return Err(io::Error::new(io::ErrorKind::InvalidData,
+          format!("File `{:?}`: Magic bytes mismatch.", path)));
+      }
+
+      // TODO: Validate remaining fields
     }
 
     if flen > fhs as u64 && ((flen - fhs as u64) % mem::size_of::<T>() as u64 != 0)
@@ -201,7 +214,7 @@ impl<T: Sized + Default> MmapedVec<T>
       return Err(io::Error::new(io::ErrorKind::InvalidData,
         format!("File `{:?}` has non-zero size, but file size minus header size is not \
           an integer multiple of the size of the data type that the file supposedly contains. \
-          This indicates that the file might be corrupt or incorrectly versioned.", path)));
+          This indicates that the file might be corrupt, incorrectly versioned or malformed.", path)));
     }
 
     let mut mm = unsafe { MmapMut::map_mut(&file)? };
@@ -219,6 +232,7 @@ impl<T: Sized + Default> MmapedVec<T>
 mod tests
 {
   use super::*;
+  use std::error::Error;
   use std::path::PathBuf;
   use std::process::{Command, ExitStatus, Stdio};
   use tempfile::TempDir;
@@ -242,20 +256,28 @@ mod tests
     }
   }
 
+  const EXAMPLE_MAGIC_BYTES:            [u8; 8] = [b'T', b'E', b'S', b'T', b'F', b'I', b'L', b'E'];
+  const EXAMPLE_CORRUPT_MAGIC_BYTES:    [u8; 8] = [b'X', b'Y', b'Z', b'T', b'F', 0, 0, 0];
+  const EXAMPLE_DATA_CONTAINED_VERSION: [u8; 3] = [0, 1, 0];
+
+  /// Helper function for tests.
+  fn tempdir_and_tempfile () -> io::Result<(TempDir, PathBuf)>
+  {
+    let dir = tempfile::tempdir()?;
+    let pathbuf = dir.path().join("file.bin");
+
+    Ok((dir, pathbuf))
+  }
+
   /// Helper function for tests.
   fn new_mmaped_vec_of_example_persisting_in_tempdir () -> io::Result<(TempDir, PathBuf, MmapedVec<Example>)>
   {
-    let dir = tempfile::tempdir()?;
+    let (dir, pathbuf) = tempdir_and_tempfile()?;
 
-    let pathbuf = dir.path().join("file.bin");
-    let path = pathbuf.as_path();
+    let mv = MmapedVec::try_new(pathbuf.as_path(),
+      EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION)?;
 
-    let magic_bytes = [b'T', b'E', b'S', b'T', b'F', b'I', b'L', b'E'];
-    let data_contained_version = [0, 1, 0];
-
-    let p = MmapedVec::try_new(path, magic_bytes, data_contained_version)?;
-
-    Ok((dir, pathbuf, p))
+    Ok((dir, pathbuf, mv))
   }
 
   /// Helper function for tests.
@@ -284,7 +306,7 @@ mod tests
   #[test]
   pub fn test_file_is_locked_while_fd_is_held () -> Result<(), io::Error>
   {
-    let (dir, pathbuf, p) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+    let (dir, pathbuf, mv) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
     assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
 
@@ -293,6 +315,23 @@ mod tests
      *      duplicate and close the fd for the file in a way that results in release of the
      *      advisory lock.
      */
+    assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
+
+    Ok(())
+  }
+
+  #[test]
+  pub fn test_existing_file_is_locked_while_fd_is_held () -> Result<(), io::Error>
+  {
+    // Create MmapedVec onto new tempfile. Header is written. Automatically close it by drop.
+    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+
+    // Create MmapedVec onto existing tempfile created above.
+    let mv = MmapedVec::<Example>::try_new(pathbuf.as_path(),
+      EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION)?;
+
+    // Run script twice as in the test above, for same reason as there.
+    assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
     assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
 
     Ok(())
@@ -311,18 +350,52 @@ mod tests
   #[test]
   pub fn test_detect_header_corrupt_magic_bytes () -> Result<(), io::Error>
   {
-    unimplemented!()
+    let (dir, pathbuf) = tempdir_and_tempfile()?;
+
+    MmapedVec::<Example>::try_new(pathbuf.as_path(),
+      EXAMPLE_CORRUPT_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION)?;
+
+    let mv_err = MmapedVec::<Example>::try_new(pathbuf.as_path(),
+      EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION).err().unwrap();
+
+    assert!(mv_err.description().ends_with("Magic bytes mismatch."));
+
+    Ok(())
   }
 
   #[test]
   pub fn test_detect_file_corrupt_truncated_to_under_end_of_header () -> Result<(), io::Error>
   {
-    unimplemented!()
+    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+
+    let mut file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
+    let flen = file.metadata().unwrap().len();
+
+    file.set_len(flen - 1);
+
+    let mv_err = MmapedVec::<Example>::try_new(pathbuf.as_path(),
+      EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION).err().unwrap();
+
+    assert!(mv_err.description().contains("shorter than the expected header size"));
+
+    Ok(())
   }
 
   #[test]
   pub fn test_detect_file_corrupt_body_not_integer_multiple_of_data_type () -> Result<(), io::Error>
   {
-    unimplemented!()
+    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+
+    let mut file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
+    let flen = file.metadata().unwrap().len();
+
+    file.set_len(flen + 1);
+
+    let mv_err = MmapedVec::<Example>::try_new(pathbuf.as_path(),
+      EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION).err().unwrap();
+
+    assert!(mv_err.description().contains("not an integer multiple of the size of the data type"));
+
+    Ok(())
   }
 }
