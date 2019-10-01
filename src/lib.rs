@@ -128,7 +128,7 @@ use memmap::MmapMut;
 use fs2::FileExt;
 
 /// Bumped to match crate version when changes are made to format itself.
-const PERSISTENCE_FORMAT_VERSION: [u8; 3] = [0, 0, 4];
+const PERSISTENCE_FORMAT_VERSION: [u8; 3] = [0, 0, 5];
 
 #[repr(C, packed)]
 struct FileHeader<T>
