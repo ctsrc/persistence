@@ -122,12 +122,13 @@
 //! if you find this library interesting or useful.
 //!
 
-use memmap::MmapMut;
+use std::marker::PhantomData;
 use std::{io, slice};
 use std::fs::{OpenOptions, File};
 use std::path::Path;
 use std::mem;
 use std::io::Write;
+use memmap::MmapMut;
 use fs2::FileExt;
 
 #[repr(C, packed)]
@@ -140,15 +141,16 @@ pub struct FileHeader<T>
   default_data: T,
 }
 
-pub struct MmapedVec
+pub struct MmapedVec<T>
 {
   file: File,
   mm: MmapMut,
+  _marker: PhantomData<T>,
 }
 
-impl MmapedVec
+impl<T: Sized + Default> MmapedVec<T>
 {
-  fn new<T: Sized + Default> (path: &Path, magic_bytes: [u8; 8], data_contained_version: [u8; 3]) -> io::Result<Self>
+  fn new (path: &Path, magic_bytes: [u8; 8], data_contained_version: [u8; 3]) -> io::Result<Self>
   {
     let mut file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
 
@@ -192,6 +194,7 @@ impl MmapedVec
     {
       file,
       mm,
+      _marker: PhantomData,
     })
   }
 }
@@ -224,7 +227,7 @@ mod tests
   }
 
   /// Helper function for tests.
-  fn new_mmaped_vec_of_example_persisting_in_tempdir () -> io::Result<(TempDir, PathBuf, MmapedVec)>
+  fn new_mmaped_vec_of_example_persisting_in_tempdir () -> io::Result<(TempDir, PathBuf, MmapedVec<Example>)>
   {
     let dir = tempfile::tempdir()?;
 
@@ -234,7 +237,7 @@ mod tests
     let magic_bytes = [b'T', b'E', b'S', b'T', b'F', b'I', b'L', b'E'];
     let data_contained_version = [0, 1, 0];
 
-    let p = MmapedVec::new::<Example>(path, magic_bytes, data_contained_version)?;
+    let p = MmapedVec::new(path, magic_bytes, data_contained_version)?;
 
     Ok((dir, pathbuf, p))
   }
