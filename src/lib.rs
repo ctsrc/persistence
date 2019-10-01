@@ -345,7 +345,7 @@ mod tests
   #[test]
   pub fn test_file_is_locked_while_fd_is_held () -> Result<(), io::Error>
   {
-    let (dir, pathbuf, mv) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+    let (_dir, pathbuf, _mv) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
     assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
 
@@ -363,10 +363,10 @@ mod tests
   pub fn test_existing_file_is_locked_while_fd_is_held () -> Result<(), io::Error>
   {
     // Create MmapedVec onto new tempfile. Header is written. Automatically close it by drop.
-    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+    let (_dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
     // Create MmapedVec onto existing tempfile created above.
-    let mv = MmapedVec::<Example>::try_new(pathbuf.as_path(),
+    let _mv = MmapedVec::<Example>::try_new(pathbuf.as_path(),
       EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION)?;
 
     // Run script twice as in the test above, for same reason as there.
@@ -379,7 +379,7 @@ mod tests
   #[test]
   pub fn test_file_is_unlocked_after_drop () -> Result<(), io::Error>
   {
-    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+    let (_dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
     assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(0));
 
@@ -389,7 +389,7 @@ mod tests
   #[test]
   pub fn test_detect_header_corrupt_magic_bytes () -> Result<(), io::Error>
   {
-    let (dir, pathbuf) = tempdir_and_tempfile()?;
+    let (_dir, pathbuf) = tempdir_and_tempfile()?;
 
     MmapedVec::<Example>::try_new(pathbuf.as_path(),
       EXAMPLE_CORRUPT_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION)?;
@@ -405,7 +405,7 @@ mod tests
   #[test]
   pub fn test_detect_file_corrupt_truncated_to_under_end_of_header () -> Result<(), io::Error>
   {
-    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+    let (_dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
     let file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
     let fhs = mem::size_of::<FileHeader<Example>>();
@@ -423,7 +423,7 @@ mod tests
   #[test]
   pub fn test_detect_file_corrupt_body_not_integer_multiple_of_data_type () -> Result<(), io::Error>
   {
-    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+    let (_dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
     let file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
     let flen = file.metadata().unwrap().len();
@@ -441,7 +441,7 @@ mod tests
   #[test]
   pub fn test_detect_endianness_marker_invalid () -> Result<(), io::Error>
   {
-    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+    let (_dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
     let mut file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
 
@@ -461,7 +461,7 @@ mod tests
   #[test]
   pub fn test_detect_wrong_endianness () -> Result<(), io::Error>
   {
-    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+    let (_dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
     let mut file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
 
