@@ -152,6 +152,12 @@ impl<T: Sized + Default> MmapedVec<T>
 {
   pub fn try_new (path: &Path, magic_bytes: [u8; 8], data_contained_version: [u8; 3]) -> io::Result<Self>
   {
+    // TODO: If the fs2 try_lock_exclusive simulated flock() on Solaris does not behave as it should,
+    //       then a preflight check might be needed, or we might blacklist target_os = "solaris".
+    //       It remains to be determined whether or not that is the case.
+    //       If it does misbehave, and we decide to blacklist, then we must be vigilant about
+    //       future changes in fs2, such as if the simulated flock() is enabled for more target OSes.
+
     let mut file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
 
     // TODO: Require that file has permissions 0600. See comments on https://stackoverflow.com/a/34935188
