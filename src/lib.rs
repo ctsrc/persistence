@@ -173,7 +173,9 @@ impl<T: Sized + Default> MmapedVec<T>
       default_data: T::default(),
     };
 
-    if file.metadata().unwrap().len() == 0
+    let flen = file.metadata().unwrap().len();
+
+    if flen == 0
     {
       let buf = unsafe
       {
@@ -183,9 +185,23 @@ impl<T: Sized + Default> MmapedVec<T>
       };
       file.write(buf)?;
     }
+    else if flen < fhs as u64
+    {
+      return Err(io::Error::new(io::ErrorKind::InvalidData,
+        format!("File `{:?}` has non-zero size ({} bytes), but it is shorter than \
+          the expected header size ({} bytes).", path, flen, fhs)));
+    }
     else
     {
       // TODO: Validate header.
+    }
+
+    if flen > fhs as u64 && ((flen - fhs as u64) % mem::size_of::<T>() as u64 != 0)
+    {
+      return Err(io::Error::new(io::ErrorKind::InvalidData,
+        format!("File `{:?}` has non-zero size, but file size minus header size is not \
+          an integer multiple of the size of the data type that the file supposedly contains. \
+          This indicates that the file might be corrupt or incorrectly versioned.", path)));
     }
 
     let mut mm = unsafe { MmapMut::map_mut(&file)? };
@@ -300,6 +316,12 @@ mod tests
 
   #[test]
   pub fn test_detect_file_corrupt_truncated_to_under_end_of_header () -> Result<(), io::Error>
+  {
+    unimplemented!()
+  }
+
+  #[test]
+  pub fn test_detect_file_corrupt_body_not_integer_multiple_of_data_type () -> Result<(), io::Error>
   {
     unimplemented!()
   }
