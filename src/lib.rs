@@ -34,7 +34,7 @@
 //!      such that abnormal termination of your program (e.g. program crash, loss of power, etc.)
 //!      incurs minimal loss of data, and
 //!   4. You are confident that all processes which rely on the data on disk honor the
-//!      POSIX advisory locks that we apply to them, so that the integrity of the data is
+//!      advisory locks that we apply to them, so that the integrity of the data is
 //!      ensured, and
 //!   5. You desire, or at least are fine with, having the on-disk representation of your data
 //!      be the same as that which it has in memory, and understand that this means that the files
@@ -43,18 +43,14 @@
 //!      you convert it then, rather than serializing and deserializing your data between some
 //!      other format and the in-memory representation all of the time.
 //!
-//! ## POSIX advisory locks
+//! ## Advisory locks
 //!
-//! This library makes use of POSIX advisory locks on Unix platforms. POSIX advisory locks are
-//! not without problems. See for example
-//! [this comment in the source code of SQLite](https://www.sqlite.org/src/artifact/c230a7a24?ln=994-1081)
-//! for a good write-up about the kinds of problems the developers of SQLite
-//! see with POSIX advisory locks, and some pitfalls that one should be aware of.
+//! This library makes use of BSD `flock()` advisory locks on Unix platforms (Linux, macOS,
+//! FreeBSD, etc).
 //!
 //! Provided that your software runs in an environment where any process that attempts to open
-//! the files you are persisting your data to honor the advisory locks, and you take care not
-//! to open the same file multiple times within the same process (as per what was said in the
-//! comment linked above), everything will be fine and dandy :)
+//! the files you are persisting your data to honor the advisory locks, everything will be
+//! fine and dandy :)
 //!
 //! ## Motivation
 //!
@@ -157,6 +153,8 @@ impl<T: Sized + Default> MmapedVec<T>
   pub fn try_new (path: &Path, magic_bytes: [u8; 8], data_contained_version: [u8; 3]) -> io::Result<Self>
   {
     let mut file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
+
+    // TODO: Require that file has permissions 0600. See comments on https://stackoverflow.com/a/34935188
 
     /*
      * NOTE: The fs2 library is cross-platform beyond just the platforms that we support.
@@ -349,13 +347,6 @@ mod tests
 
     assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
 
-    /*
-     * XXX: We run the script an additional time to be sure that the test itself does not
-     *      duplicate and close the fd for the file in a way that results in release of the
-     *      advisory lock.
-     */
-    assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
-
     Ok(())
   }
 
@@ -369,12 +360,15 @@ mod tests
     let _mv = MmapedVec::<Example>::try_new(pathbuf.as_path(),
       EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION)?;
 
-    // Run script twice as in the test above, for same reason as there.
-    assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
     assert_eq!(python3_try_lock_exclusive(pathbuf.as_path())?.code(), Some(35));
 
     Ok(())
   }
+
+  // TODO: Test opening multiple fds to the same file and unlocking one of them.
+
+  // TODO: Test locking and unlocking same file opened through real path and through
+  //       symlink and see what happens.
 
   #[test]
   pub fn test_file_is_unlocked_after_drop () -> Result<(), io::Error>

@@ -23,7 +23,7 @@ try:
 
   fd = open(sys.argv[1], 'ab')
 
-  fcntl.lockf(fd, fcntl.LOCK_EX|fcntl.LOCK_NB)
+  fcntl.flock(fd, fcntl.LOCK_EX|fcntl.LOCK_NB)
 
 except BlockingIOError:
 

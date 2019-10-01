@@ -20,7 +20,7 @@ techniques in run-time environments where all of the following hold true:
      such that abnormal termination of your program (e.g. program crash, loss of power, etc.)
      incurs minimal loss of data, and
   4. You are confident that all processes which rely on the data on disk honor the
-     POSIX advisory locks that we apply to them, so that the integrity of the data is
+     advisory locks that we apply to them, so that the integrity of the data is
      ensured, and
   5. You desire, or at least are fine with, having the on-disk representation of your data
      be the same as that which it has in memory, and understand that this means that the files
@@ -29,18 +29,14 @@ techniques in run-time environments where all of the following hold true:
      you convert it then, rather than serializing and deserializing your data between some
      other format and the in-memory representation all of the time.
 
-## POSIX advisory locks
+## Advisory locks
 
-This library makes use of POSIX advisory locks on Unix platforms. POSIX advisory locks are
-not without problems. See for example
-[this comment in the source code of SQLite](https://www.sqlite.org/src/artifact/c230a7a24?ln=994-1081)
-for a good write-up about the kinds of problems the developers of SQLite
-see with POSIX advisory locks, and some pitfalls that one should be aware of.
+This library makes use of BSD `flock()` advisory locks on Unix platforms (Linux, macOS,
+FreeBSD, etc).
 
 Provided that your software runs in an environment where any process that attempts to open
-the files you are persisting your data to honor the advisory locks, and you take care not
-to open the same file multiple times within the same process (as per what was said in the
-comment linked above), everything will be fine and dandy :)
+the files you are persisting your data to honor the advisory locks, everything will be
+fine and dandy :)
 
 ## Learn more and get started
 
