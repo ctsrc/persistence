@@ -135,7 +135,7 @@ use fs2::FileExt;
 const PERSISTENCE_FORMAT_VERSION: [u8; 3] = [0, 0, 4];
 
 #[repr(C, packed)]
-pub struct FileHeader<T>
+struct FileHeader<T>
 {
   magic_bytes: [u8; 8],
   endianness: u16,
