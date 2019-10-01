@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/persistence.svg)](https://crates.io/crates/persistence) [![Docs.rs](https://docs.rs/persistence/badge.svg)](https://docs.rs/persistence/)
 
-This Rust library provides [`MmapedVec`](https://docs.rs/persistence/0.0.3/persistence/struct.MmapedVec.html);
+This Rust library provides [`MmapedVec`](https://docs.rs/persistence/latest/persistence/struct.MmapedVec.html);
 a resizable, mutable array type implemented on top of
 [`mmap()`](https://pubs.opengroup.org/onlinepubs/7908799/xsh/mmap.html),
 providing a [`Vec`](https://doc.rust-lang.org/std/vec/struct.Vec.html)-like data structure
