@@ -131,14 +131,18 @@ use std::io::{Read, Write};
 use memmap::MmapMut;
 use fs2::FileExt;
 
+/// Bumped to match crate version when changes are made to format itself.
+const PERSISTENCE_FORMAT_VERSION: [u8; 3] = [0, 0, 4];
+
 #[repr(C, packed)]
 pub struct FileHeader<T>
 {
   magic_bytes: [u8; 8],
   endianness: u16,
-  persistence_version: [u8; 3],
+  persistence_format_version: [u8; 3],
   data_contained_version: [u8; 3],
   default_data: T,
+  number_of_padding_bytes_after_header: u16,
 }
 
 pub struct MmapedVec<T>
@@ -164,16 +168,25 @@ impl<T: Sized + Default> MmapedVec<T>
 
     let fhs = mem::size_of::<FileHeader<T>>();
 
+    let number_of_padding_bytes_after_header = match fhs % 4096
+    {
+      0 => 0,
+      _ => (4096 - fhs % 4096) as u16,
+    };
+
     let fh = FileHeader
     {
       magic_bytes,
       endianness: 0x1234,
-      persistence_version: [0, 1, 0],
+      persistence_format_version: PERSISTENCE_FORMAT_VERSION,
       data_contained_version,
       default_data: T::default(),
+      number_of_padding_bytes_after_header,
     };
 
     let flen = file.metadata().unwrap().len();
+
+    let len_fh_and_padding = fhs as u64 + number_of_padding_bytes_after_header as u64;
 
     if flen == 0
     {
@@ -184,6 +197,7 @@ impl<T: Sized + Default> MmapedVec<T>
           mem::size_of::<FileHeader<T>>())
       };
       file.write(buf)?;
+      file.set_len(len_fh_and_padding)?;
     }
     else if flen < fhs as u64
     {
@@ -194,9 +208,9 @@ impl<T: Sized + Default> MmapedVec<T>
     else
     {
       let mut fh_handle = file.try_clone()?.take(fhs as u64);
-      let mut fh_buf = vec![0 as u8; fhs];
+      let mut fh_buf = vec![0u8; fhs];
 
-      fh_handle.read(fh_buf.as_mut_slice());
+      fh_handle.read(fh_buf.as_mut_slice()).unwrap();
 
       let fh_file = unsafe { std::ptr::read(fh_buf.as_ptr() as *const FileHeader<T>) };
 
@@ -206,15 +220,35 @@ impl<T: Sized + Default> MmapedVec<T>
           format!("File `{:?}`: Magic bytes mismatch.", path)));
       }
 
+      if fh_file.endianness != fh.endianness
+      {
+        if (fh_file.endianness << 8 | fh_file.endianness >> 8) != fh.endianness
+        {
+          return Err(io::Error::new(io::ErrorKind::InvalidData,
+            format!("File `{:?}`: Endianness-marker invalid.", path)));
+        }
+        else
+        {
+          return Err(io::Error::new(io::ErrorKind::InvalidData,
+            format!("File `{:?}`: Wrong endianness.", path)));
+        }
+      }
+
       // TODO: Validate remaining fields
     }
 
-    if flen > fhs as u64 && ((flen - fhs as u64) % mem::size_of::<T>() as u64 != 0)
+    if flen > 0 && flen < len_fh_and_padding
+    {
+      // TODO: Error
+    }
+
+    if flen > len_fh_and_padding && ((flen - len_fh_and_padding) % mem::size_of::<T>() as u64 != 0)
     {
       return Err(io::Error::new(io::ErrorKind::InvalidData,
-        format!("File `{:?}` has non-zero size, but file size minus header size is not \
-          an integer multiple of the size of the data type that the file supposedly contains. \
-          This indicates that the file might be corrupt, incorrectly versioned or malformed.", path)));
+        format!("File `{:?}` has non-zero size, but file size minus header size and padding \
+          bytes is not an integer multiple of the size of the data type that the file supposedly \
+          contains. This indicates that the file might be corrupt, incorrectly versioned or \
+          malformed.", path)));
     }
 
     let mut mm = unsafe { MmapMut::map_mut(&file)? };
@@ -235,7 +269,9 @@ mod tests
   use std::error::Error;
   use std::path::PathBuf;
   use std::process::{Command, ExitStatus, Stdio};
+  use std::io::{Seek, SeekFrom};
   use tempfile::TempDir;
+  use memoffset::offset_of;
 
   #[repr(C, packed)]
   struct Example
@@ -259,6 +295,9 @@ mod tests
   const EXAMPLE_MAGIC_BYTES:            [u8; 8] = [b'T', b'E', b'S', b'T', b'F', b'I', b'L', b'E'];
   const EXAMPLE_CORRUPT_MAGIC_BYTES:    [u8; 8] = [b'X', b'Y', b'Z', b'T', b'F', 0, 0, 0];
   const EXAMPLE_DATA_CONTAINED_VERSION: [u8; 3] = [0, 1, 0];
+
+  // XXX: Type alias for use with offset_of!()
+  type ExampleFileHeader = FileHeader<Example>;
 
   /// Helper function for tests.
   fn tempdir_and_tempfile () -> io::Result<(TempDir, PathBuf)>
@@ -368,10 +407,10 @@ mod tests
   {
     let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
-    let mut file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
-    let flen = file.metadata().unwrap().len();
+    let file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
+    let fhs = mem::size_of::<FileHeader<Example>>();
 
-    file.set_len(flen - 1);
+    file.set_len((fhs - 1) as u64).unwrap();
 
     let mv_err = MmapedVec::<Example>::try_new(pathbuf.as_path(),
       EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION).err().unwrap();
@@ -386,15 +425,61 @@ mod tests
   {
     let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
 
-    let mut file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
+    let file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
     let flen = file.metadata().unwrap().len();
 
-    file.set_len(flen + 1);
+    file.set_len(flen + 1).unwrap();
 
     let mv_err = MmapedVec::<Example>::try_new(pathbuf.as_path(),
       EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION).err().unwrap();
 
     assert!(mv_err.description().contains("not an integer multiple of the size of the data type"));
+
+    Ok(())
+  }
+
+  #[test]
+  pub fn test_detect_endianness_marker_invalid () -> Result<(), io::Error>
+  {
+    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+
+    let mut file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
+
+    let offs = SeekFrom::Start(offset_of!(ExampleFileHeader, endianness) as u64);
+
+    file.seek(offs).unwrap();
+    file.write(&[0u8, 0]).unwrap();
+
+    let mv_err = MmapedVec::<Example>::try_new(pathbuf.as_path(),
+      EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION).err().unwrap();
+
+    assert!(mv_err.description().ends_with("Endianness-marker invalid."));
+
+    Ok(())
+  }
+
+  #[test]
+  pub fn test_detect_wrong_endianness () -> Result<(), io::Error>
+  {
+    let (dir, pathbuf, _) = new_mmaped_vec_of_example_persisting_in_tempdir()?;
+
+    let mut file = OpenOptions::new().read(true).write(true).open(pathbuf.as_path())?;
+
+    let offs = SeekFrom::Start(offset_of!(ExampleFileHeader, endianness) as u64);
+
+    file.seek(offs).unwrap();
+
+    let mut buf = [0u8, 0];
+    file.read_exact(&mut buf).unwrap();
+    buf.reverse();
+
+    file.seek(offs).unwrap();
+    file.write(&buf).unwrap();
+
+    let mv_err = MmapedVec::<Example>::try_new(pathbuf.as_path(),
+      EXAMPLE_MAGIC_BYTES, EXAMPLE_DATA_CONTAINED_VERSION).err().unwrap();
+
+    assert!(mv_err.description().ends_with("Wrong endianness."));
 
     Ok(())
   }
