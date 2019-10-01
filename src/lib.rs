@@ -150,7 +150,7 @@ pub struct MmapedVec<T>
 
 impl<T: Sized + Default> MmapedVec<T>
 {
-  fn try_new (path: &Path, magic_bytes: [u8; 8], data_contained_version: [u8; 3]) -> io::Result<Self>
+  pub fn try_new (path: &Path, magic_bytes: [u8; 8], data_contained_version: [u8; 3]) -> io::Result<Self>
   {
     let mut file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
 
