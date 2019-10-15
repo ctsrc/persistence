@@ -6,6 +6,7 @@ readme = "README.md"
 repository = "https://github.com/ctsrc/persistence"
 version = "0.0.5"
 authors = ["Erik Nordstrøm <erik@nordstroem.no>"]
+keywords = ["data-oriented-design"]
 edition = "2018"
 
 [dependencies]
